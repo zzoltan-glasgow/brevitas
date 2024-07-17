@@ -9,6 +9,10 @@ import os
 import pprint
 import random
 
+import onnx
+
+from concrete.ml.torch.compile import compile_onnx_model
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -131,8 +135,32 @@ def main():
         print(pretty_stats_dict)
 
     # save and export model
-    export(model, testloader, args)
+    export(model, testloader, args, opset_version=14) # Use newer opset version as requirement for concrete-ml onnx compiler
+
+
+    # transform datloader to tensor for compilation to be used as calibration data
+    test_tensor = dataloader_to_tensor(testloader)
+    
+    onnx_model = onnx.load('outputs/qonnx_model.onnx')
+
+    quant_module = compile_onnx_model(onnx_model,test_tensor)
+
+def dataloader_to_tensor(dataloader):
+    tensors_list = []
+
+    for data in dataloader:
+        # Assuming that the data is a tuple (inputs, labels) and we want to collect the inputs
+        # Modify as necessary if the structure of data is different
+        inputs, _ = data
+        tensors_list.append(inputs)
+
+    # Concatenate all tensors into a single tensor
+    result_tensor = torch.cat(tensors_list, dim=0)
+
+    return result_tensor
 
 
 if __name__ == '__main__':
     main()
+    
+    
